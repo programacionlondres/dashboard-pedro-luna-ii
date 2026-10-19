@@ -69,19 +69,31 @@
       });
     });
     var o = D.resumen.OBRA;
-    var real = o.real[c], prog = o.prog[c];
+    var pO = progResumen(o, D.resumen);
+    var real = o.real[c], prog = pO[c];
     var termObra = parseISO(D.terminoObra);
     var ritmo4 = c >= 4 ? (real - o.real[c - 4]) / 4 : null;
     var semRest = termObra ? (termObra - finSem) / (7 * 86400000) : 0;
     var obra = {
-      real: real, prog: prog, dif: real - prog,
-      semReal: c > 0 ? real - o.real[c - 1] : real, semProg: c > 0 ? prog - o.prog[c - 1] : prog,
+      real: real, prog: prog, dif: prog === null ? null : real - prog,
+      semReal: c > 0 ? real - o.real[c - 1] : real,
+      semProg: prog === null ? null : c > 0 ? (pO[c - 1] === null ? null : prog - pO[c - 1]) : prog,
       ritmo4: ritmo4, req: semRest > 0 ? (1 - real) / semRest : 1 - real,
       proy: ritmo4 > 0 ? addDays(finSem, Math.floor((1 - real) / ritmo4 * 7)) : null,
-      spi: prog > 0 ? real / prog : null, termino: termObra
+      spi: prog > 0 ? real / prog : null, termino: termObra, progDesde: primerProg(o, D.resumen)
     };
     return { c: c, inicioSem: parseISO(D.semanas[c]), finSem: finSem, partidas: partidas, frentes: frentes, grupos: grupos, obra: obra };
   }
+
+  // Programado de una fila resumen: si el Gantt lo trae en 0 mientras ya hay avance real
+  // (programado aún no cargado en esas semanas), se muestra "sin dato" en vez de 0.
+  //   El corte se toma de la fila OBRA y se aplica igual a los frentes.
+  function progResumen(s, R) {
+    var o = (R || DATA.resumen).OBRA, first = -1;
+    for (var j = 0; j < o.prog.length; j++) if (o.prog[j] > 0) { first = j; break; }
+    return s.prog.map(function (v, j) { return (first < 0 || j < first) && o.real[j] > 0 ? null : v; });
+  }
+  function primerProg(s, R) { var p = progResumen(s, R); for (var j = 0; j < p.length; j++) if (p[j] !== null) return j; return -1; }
 
   function agregado(lista) {
     var w = 0, r = 0, p = 0;
@@ -108,6 +120,7 @@
   function renderTodo() {
     MODEL = construir(DATA, state.semana);
     $("titulo").textContent = "Dashboard de avance · " + DATA.obra;
+    document.title = "Dashboard " + DATA.obra;
     $("subtitulo").textContent = "Semana de control: " + fdate(MODEL.inicioSem) + " al " + fdate(MODEL.finSem) +
       " · Término programado: " + fdate(MODEL.obra.termino) + " · " + DATA.casas + " viviendas";
     $("pie").textContent = "Fuente: " + (DATA.fuente || "Gantt Control") + " · Fecha de control del Gantt: " + fdate(parseISO(DATA.fechaControl)) +
@@ -120,9 +133,10 @@
     var o = MODEL.obra;
     $("kpis").innerHTML =
       kpi("Avance real", pct(o.real)) +
-      kpi("Avance programado", pct(o.prog)) +
-      kpi("Diferencia", pts(o.dif * 100) + " pts", o.dif >= 0 ? "adelanto" : "atraso", o.dif >= 0 ? "bueno" : "malo") +
-      kpi("Avance semana", pct(o.semReal, 2), "programado " + pct(o.semProg, 2), o.semReal >= o.semProg ? "bueno" : "malo") +
+      kpi("Avance programado", o.prog === null ? "–" : pct(o.prog), o.prog === null ? "sin dato en el Gantt" : "") +
+      (o.dif === null ? kpi("Diferencia", "–", "sin programado") :
+        kpi("Diferencia", pts(o.dif * 100) + " pts", o.dif >= 0 ? "adelanto" : "atraso", o.dif >= 0 ? "bueno" : "malo")) +
+      kpi("Avance semana", pct(o.semReal, 2), o.semProg === null ? "programado sin dato" : "programado " + pct(o.semProg, 2), o.semProg === null ? "" : o.semReal >= o.semProg ? "bueno" : "malo") +
       kpi("SPI", o.spi === null ? "–" : nf2.format(o.spi), "real / programado", o.spi >= 1 ? "bueno" : "malo") +
       kpi("Ritmo últ. 4 semanas", o.ritmo4 === null ? "–" : pct(o.ritmo4, 2), "% de obra por semana") +
       kpi("Ritmo requerido", pct(o.req, 2), "para terminar el " + fdate(o.termino), o.ritmo4 !== null && o.req > o.ritmo4 ? "malo" : "bueno") +
@@ -134,20 +148,24 @@
     var n = function (e) { return f.filter(function (x) { return x.estado === e; }).length; };
     var alc = o.ritmo4 !== null && o.req <= o.ritmo4;
     $("lectura").innerHTML =
+      (o.dif === null ? "• Avance real <b>" + pct(o.real) + "</b>. El Gantt no trae avance programado de obra para esta semana. Esta semana avanzó " + pct(o.semReal, 2) + ".<br>" :
       "• La obra va <b>" + (o.dif >= 0 ? "adelantada " : "atrasada ") + nf1.format(Math.abs(o.dif * 100)) + " pts</b> (" + pct(o.real) + " real vs " + pct(o.prog) +
-      " programado). Esta semana avanzó " + pct(o.semReal, 2) + " vs " + pct(o.semProg, 2) + " programado.<br>" +
+      " programado). Esta semana avanzó " + pct(o.semReal, 2) + (o.semProg === null ? "" : " vs " + pct(o.semProg, 2) + " programado") + ".<br>") +
       (o.ritmo4 === null ? "" : "• Ritmo de las últimas 4 semanas: <b>" + pct(o.ritmo4, 2) + "/sem</b>. Para terminar en la fecha del Gantt se requiere " + pct(o.req, 2) + "/sem" + (alc ? ": el ritmo actual alcanza." : ": <b>hay que acelerar</b>.") + "<br>") +
       "• Partidas" + (state.frente === "Todos" ? "" : " de " + esc(state.frente)) + ": <b>" + n("Atrasada") + "</b> atrasadas, <b>" + n("Detenida") +
       "</b> detenidas (≥3 semanas sin avance), <b>" + n("No iniciada (atrasada)") + "</b> que debían iniciar y no lo han hecho.";
   }
 
   function renderCurvas() {
-    var c = MODEL.c, o = DATA.resumen.OBRA;
+    var c = MODEL.c, o = DATA.resumen.OBRA, pO = progResumen(o), pd = MODEL.obra.progDesde;
+    var cp = DATA.correccionProg && DATA.correccionProg.OBRA;
+    $("notaCurva").textContent = pd > 0 ? "(el Gantt trae programado de obra desde la semana del " + fdate(parseISO(DATA.semanas[pd])) + ")" :
+      cp ? "(programado hasta la semana del " + fdate(parseISO(cp.hasta)) + " tomado de la tabla diaria del Gantt, fila " + cp.filaTabla + ", porque la fila resumen lo traía en 0)" : "";
     grafico("chCurva", {
       type: "line",
       data: { labels: DATA.semanas.map(function (s) { return fdate(parseISO(s)); }),
         datasets: [
-          { label: "Programado", data: o.prog, borderColor: C.celeste, borderWidth: 3, pointRadius: 0 },
+          { label: "Programado", data: pO, borderColor: C.celeste, borderWidth: 3, pointRadius: 0 },
           { label: "Real", data: o.real.map(function (v, j) { return j <= c ? v : null; }), borderColor: C.navy, borderWidth: 2.5, pointRadius: 0 }
         ] },
       options: { scales: { y: ejePct(1), x: ejeX },
@@ -157,7 +175,7 @@
     for (var j = Math.max(0, c - 11); j <= c; j++) {
       lab.push(fdate(parseISO(DATA.semanas[j]), true));
       re.push(j > 0 ? o.real[j] - o.real[j - 1] : o.real[j]);
-      pr.push(j > 0 ? o.prog[j] - o.prog[j - 1] : o.prog[j]);
+      pr.push(pO[j] === null ? null : j > 0 ? (pO[j - 1] === null ? null : pO[j] - pO[j - 1]) : pO[j]);
     }
     grafico("chSemanal", {
       type: "bar",
@@ -175,8 +193,10 @@
 
   function renderFrentes() {
     var c = MODEL.c, rows = ["OBRAS PREVIAS", "VIVIENDAS", "URBANIZACIÓN", "EQUIPAMIENTO"].map(function (m) {
-      var s = DATA.resumen[m], d = (s.real[c] - s.prog[c]) * 100;
-      return filaTabla([td(m.charAt(0) + m.slice(1).toLowerCase(), "izq"), td(pct(s.peso, 0)), td(barra(s.real[c])), td(pct(s.prog[c])), td(pts(d), cls(d))]);
+      var s = DATA.resumen[m], pm = progResumen(s)[c];
+      if (pm === null) return filaTabla([td(m.charAt(0) + m.slice(1).toLowerCase(), "izq"), td(pct(s.peso, 0)), td(barra(s.real[c])), td("–"), td("–")]);
+      var d = (s.real[c] - pm) * 100;
+      return filaTabla([td(m.charAt(0) + m.slice(1).toLowerCase(), "izq"), td(pct(s.peso, 0)), td(barra(s.real[c])), td(pct(pm)), td(pts(d), cls(d))]);
     });
     $("tblMacro").innerHTML = "<tr><th class=izq>Frente</th><th>Peso</th><th>Real</th><th>Prog.</th><th>Dif. pts</th></tr>" + rows.join("");
     var labs = [], re = [], pr = [];
@@ -386,7 +406,7 @@
       var csv = [cab].concat(l).map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(";"); }).join("\r\n");
       descargar(new Blob(["﻿" + csv], { type: "text/csv" }), "partidas_" + DATA.obra.replace(/\s+/g, "_") + ".csv");
     });
-    $("archivo").addEventListener("change", function (e) {
+    if ($("archivo")) $("archivo").addEventListener("change", function (e) {
       var file = e.target.files[0]; if (!file) return;
       $("estadoCarga").textContent = "Procesando " + file.name + "…";
       var rd = new FileReader();
@@ -404,7 +424,7 @@
       };
       rd.readAsArrayBuffer(file);
     });
-    $("btnJson").addEventListener("click", function () {
+    if ($("btnJson")) $("btnJson").addEventListener("click", function () {
       descargar(new Blob([JSON.stringify(DATA)], { type: "application/json" }), "avance.json");
     });
   }
@@ -417,13 +437,14 @@
     eventos();
     var embebido = document.getElementById("datos-embebidos");
     if (embebido) { cargar(JSON.parse(embebido.textContent), "Datos publicados"); return; }
-    fetch("data/avance.json", { cache: "no-store" })
+    fetch("avance.json", { cache: "no-store" })
+      .then(function (r) { if (r.ok) return r; return fetch("data/avance.json", { cache: "no-store" }); })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (D) { cargar(D, "Datos publicados"); })
       .catch(function () {
         $("vacio").hidden = false;
         $("subtitulo").textContent = "Sin datos publicados";
-        document.querySelector('.tab[data-tab="actualizar"]').click();
+        var t = document.querySelector('.tab[data-tab="actualizar"]'); if (t) t.click();
       });
   }
   init();
