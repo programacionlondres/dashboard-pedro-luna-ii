@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dashboard de avance de obra</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="icon" href="assets/londres.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="londres.png">
 </head>
 <body>
   <header class="top">
@@ -16,8 +16,8 @@
       </div>
     </div>
     <div class="logos">
-      <img src="assets/londres.png" alt="Constructora Londres">
-      <img src="assets/conavicoop.png" alt="Conavicoop">
+      <img src="londres.png" alt="Constructora Londres">
+      <img src="conavicoop.png" alt="Conavicoop">
     </div>
   </header>
 
@@ -124,7 +124,7 @@
         <ol>
           <li>Cargue arriba el Gantt de la semana y revise que el dashboard se vea bien.</li>
           <li>Presione <b>Descargar avance.json</b>.</li>
-          <li>En GitHub, entre al repositorio → carpeta <b>data</b> → <b>Add file</b> → <b>Upload files</b>.</li>
+          <li>En GitHub, entre al repositorio → <b>Add file</b> → <b>Upload files</b> (en la página principal del repositorio, no dentro de una carpeta).</li>
           <li>Arrastre el archivo <b>avance.json</b> (reemplaza al anterior) y presione <b>Commit changes</b>.</li>
           <li>En 1 a 2 minutos la página publicada muestra la nueva semana.</li>
         </ol>
@@ -135,9 +135,10 @@
 
   <footer id="pie"></footer>
 
-  <script src="lib/chart.umd.js"></script>
-  <script src="lib/xlsx.full.min.js"></script>
-  <script src="js/parser.js"></script>
-  <script src="js/app.js"></script>
+  <script src="chart.umd.js"></script>
+  <script src="xlsx.full.min.js"></script>
+  <script src="parser.js"></script>
+  <script>(function(){var f=window.fetch;window.fetch=function(u,o){if(u==="data/avance.json")u="avance.json";return f.call(window,u,o);};})();</script>
+  <script src="app.js"></script>
 </body>
 </html>
